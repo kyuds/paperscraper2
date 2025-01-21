@@ -1,10 +1,11 @@
 use std::option::Option;
-use chrono::{Duration, Utc, DateTime};
+use chrono::{DateTime, Duration, TimeZone, Utc};
 use reqwest;
+use quick_xml::de::from_str;
+use serde::Deserialize;
 
 use crate::config::Config;
 
-// URL query creator
 macro_rules! arxiv_url {
     () => { "https://export.arxiv.org/api/query/?search_query=%28{}%29+AND+submittedDate:[{}+TO+{}]&max_results={}" }
 }
@@ -38,8 +39,8 @@ impl ArxivParser {
         format!(arxiv_url!(), categories, d0, d1, self.config.num_entries)
     }
 
-    fn get_raw_xml(&self) -> String {
-        let url = self.create_query_url(None);
+    fn get_raw_xml(&self, date: Option<DateTime<Utc>>) -> String {
+        let url = self.create_query_url(date);
         let response = match reqwest::blocking::get(url) {
             Ok(response) => response,
             Err(e) => {
@@ -56,31 +57,113 @@ impl ArxivParser {
         }
     }
 
-    pub fn get_arxiv_results(&self) -> String {
-        self.get_raw_xml()
+    pub fn get_arxiv_results(&self, date: Option<DateTime<Utc>>) -> Vec<ArxivResult> {
+        let xml = self.get_raw_xml(date);
+        let parsed: ArxivDocument = match from_str(xml.as_str()) {
+            Ok(result) => result,
+            Err(e) => {
+                eprintln!("Failed to parse xml data: {}", e);
+                return Vec::new();
+            }
+        };
+        parsed.entries.into_iter()
+            .map(ArxivResult::from_entry)
+            .collect::<Vec<_>>()
     }
 }
+
+// Arxiv Data Model
 
 #[derive(Debug)]
 pub struct ArxivResult {
     pub title: String,
-    pub content: String,
-    pub link: String,
+    pub summary: String,
     pub authors: Vec<String>,
-    pub published: DateTime<Utc>
+    pub published: DateTime<Utc>,
+    pub link: String
 }
 
 impl ArxivResult {
-    fn new(title: String, content: String, link: String, authors: Vec<String>, published: DateTime<Utc>) -> Self {
+    fn new(title: String, summary: String, authors: Vec<String>, published: DateTime<Utc>, link: String) -> Self {
         ArxivResult {
             title,
-            content,
-            link,
+            summary,
             authors,
-            published
+            published,
+            link
         }
     }
+
+    fn from_entry(entry: ArxivEntry) -> Self {
+        let published: DateTime<Utc> = DateTime::parse_from_rfc3339(&entry.published)
+            .map(|dt| dt.with_timezone(&Utc)) 
+            .unwrap_or_else(|_err| {
+                eprintln!("Failed to parse published date: {}", _err);
+                Utc.timestamp_opt(0, 0).unwrap()
+            });
+
+        Self::new(
+            entry.title, 
+            entry.summary.replace("\n", " "), 
+            entry.authors.into_iter().map(|a| a.name).collect::<Vec<_>>(), 
+            published, 
+            entry.links.into_iter()
+                .find(|field| matches!(field.link_type, LinkType::Home))
+                .map(|field| field.link)
+                .unwrap_or_else(|| String::new())
+        )
+    }
 }
+
+// end Arxiv Data Model
+
+// Arxiv Raw XML Model
+
+#[derive(Debug, Default, PartialEq, Deserialize)]
+#[serde(default)]
+struct ArxivDocument {
+    #[serde(rename = "entry")]
+    entries: Vec<ArxivEntry>
+}
+
+#[derive(Debug, Default, PartialEq, Deserialize)]
+#[serde(default)]
+struct ArxivEntry {
+    title: String,
+    summary: String,
+    #[serde(rename = "author")]
+    authors: Vec<AuthorField>,
+    published: String,
+    #[serde(rename = "link")]
+    links: Vec<LinkField>
+}
+
+#[derive(Debug, Default, PartialEq, Deserialize)]
+#[serde(default)]
+struct AuthorField {
+    name: String
+}
+
+#[derive(Debug, Default, PartialEq, Deserialize)]
+#[serde(default)]
+struct LinkField {
+    #[serde(rename = "@href")]
+    link: String,
+    #[serde(rename = "@type")]
+    link_type: LinkType
+}
+
+#[derive(Debug, Default, PartialEq, Deserialize)]
+enum LinkType {
+    #[serde(rename = "text/html")]
+    Home,
+    #[serde(rename = "application/pdf")]
+    Pdf,
+    #[default]
+    Unknown,
+}
+
+// end Arxiv Raw XML Model
 
 #[cfg(test)]
 mod tests {
@@ -88,7 +171,11 @@ mod tests {
 
     use super::*;
 
-    static ACTUAL: &str = "https://export.arxiv.org/api/query/?search_query=%28cat:cs.CL+OR+cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.MA%29+AND+submittedDate:[202412300000+TO+202412310000]&max_results=500";
+    const ACTUAL: &str = concat!(
+        "https://export.arxiv.org/api/query/",
+        "?search_query=%28cat:cs.CL+OR+cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.MA%29+AND+",
+        "submittedDate:[202412300000+TO+202412310000]&max_results=500"
+    );
 
     #[test]
     fn test_url_generation() {
