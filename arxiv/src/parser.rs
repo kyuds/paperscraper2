@@ -1,13 +1,23 @@
-use std::option::Option;
+use std::{
+    fmt,
+    option::Option
+};
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use reqwest;
 use quick_xml::de::from_str;
-use serde::Deserialize;
+use serde::{
+    de::{Visitor, MapAccess}, 
+    Deserialize, 
+    Deserializer
+};
 
 use crate::config::Config;
 
 macro_rules! arxiv_url {
-    () => { "https://export.arxiv.org/api/query/?search_query=%28{}%29+AND+submittedDate:[{}+TO+{}]&max_results={}" }
+    () => { concat!(
+        "https://export.arxiv.org/api/query/?search_query=",
+        "%28{}%29+AND+submittedDate:[{}+TO+{}]&start={}&max_results={}"
+    ) }
 }
 
 #[derive(Debug)]
@@ -22,7 +32,7 @@ impl ArxivParser {
         }
     }
 
-    fn create_query_url(&self, date: Option<DateTime<Utc>>) -> String {
+    fn create_query_url(&self, date: Option<DateTime<Utc>>, start: i32) -> String {
         // search categories.
         let categories = self.config.categories.iter()
             .map(|cat| format!("cat:{}", cat))
@@ -36,11 +46,11 @@ impl ArxivParser {
         let d1 = format!("{}0000", (t - Duration::days(offset)).format("%Y%m%d"));
 
         // format using a named macro
-        format!(arxiv_url!(), categories, d0, d1, self.config.num_entries)
+        format!(arxiv_url!(), categories, d0, d1, start, self.config.num_entries)
     }
 
-    fn get_raw_xml(&self, date: Option<DateTime<Utc>>) -> String {
-        let url = self.create_query_url(date);
+    fn get_raw_xml(&self, date: Option<DateTime<Utc>>, start: i32) -> String {
+        let url = self.create_query_url(date, start);
         let response = match reqwest::blocking::get(url) {
             Ok(response) => response,
             Err(e) => {
@@ -58,17 +68,28 @@ impl ArxivParser {
     }
 
     pub fn get_arxiv_results(&self, date: Option<DateTime<Utc>>) -> Vec<ArxivResult> {
-        let xml = self.get_raw_xml(date);
-        let parsed: ArxivDocument = match from_str(xml.as_str()) {
-            Ok(result) => result,
-            Err(e) => {
-                eprintln!("Failed to parse xml data: {}", e);
-                return Vec::new();
+        let mut results: Vec<ArxivResult> = Vec::new();
+        for page in 0..self.config.num_pages {
+            let start = self.config.num_entries * page;
+            let xml = self.get_raw_xml(date, start);
+            let parsed: ArxivDocument = match from_str(xml.as_str()) {
+                Ok(result) => result,
+                Err(e) => {
+                    eprintln!("Failed to parse xml data: {}", e);
+                    println!("{}", xml);
+                    ArxivDocument::default()
+                }
+            };
+            let mut page_results = parsed.entries.into_iter()
+                .map(ArxivResult::from_entry)
+                .collect::<Vec<_>>();
+            if page_results.is_empty() {
+                break;
             }
-        };
-        parsed.entries.into_iter()
-            .map(ArxivResult::from_entry)
-            .collect::<Vec<_>>()
+            results.append(&mut page_results);
+            println!("epoch {}, documents {}", page, page_results.len());
+        }
+        results
     }
 }
 
@@ -105,10 +126,13 @@ impl ArxivResult {
         Self::new(
             entry.title, 
             entry.summary.replace("\n", " "), 
-            entry.authors.into_iter().map(|a| a.name).collect::<Vec<_>>(), 
+            entry.authors.into_iter().map(|a| a.name.value).collect::<Vec<_>>(), 
             published, 
             entry.links.into_iter()
-                .find(|field| matches!(field.link_type, LinkType::Home))
+                .find(|field| match field.link_type {
+                    Some(LinkType::Home) => true,
+                    _ => false,
+                })
                 .map(|field| field.link)
                 .unwrap_or_else(|| String::new())
         )
@@ -131,17 +155,24 @@ struct ArxivDocument {
 struct ArxivEntry {
     title: String,
     summary: String,
-    #[serde(rename = "author")]
+    #[serde(rename = "author", flatten, deserialize_with = "de_author")]
     authors: Vec<AuthorField>,
     published: String,
-    #[serde(rename = "link")]
+    #[serde(rename = "link", flatten, deserialize_with = "de_link")]
     links: Vec<LinkField>
 }
 
 #[derive(Debug, Default, PartialEq, Deserialize)]
 #[serde(default)]
 struct AuthorField {
-    name: String
+    name: NameField
+}
+
+#[derive(Debug, Default, PartialEq, Deserialize)]
+#[serde(default)]
+struct NameField {
+    #[serde(rename = "$text")]
+    value: String
 }
 
 #[derive(Debug, Default, PartialEq, Deserialize)]
@@ -150,7 +181,7 @@ struct LinkField {
     #[serde(rename = "@href")]
     link: String,
     #[serde(rename = "@type")]
-    link_type: LinkType
+    link_type: Option<LinkType>
 }
 
 #[derive(Debug, Default, PartialEq, Deserialize)]
@@ -161,6 +192,64 @@ enum LinkType {
     Pdf,
     #[default]
     Unknown,
+}
+
+fn de_author<'de, D>(deserializer: D) -> Result<Vec<AuthorField>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct AuthorVisitor;
+    impl<'de> Visitor<'de> for AuthorVisitor {
+        type Value = Vec<AuthorField>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("Map of children elements - filtering for field: `author`")
+        }
+
+        fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+        where
+            M: MapAccess<'de>,
+        {
+            let mut links = Vec::<AuthorField>::new();
+            while let Some(key) = access.next_key::<String>()? {
+                if key == "author" {
+                    let var = access.next_value::<AuthorField>().unwrap();
+                    links.push(var);
+                }
+            };
+            Ok(links)
+        }
+    }
+    deserializer.deserialize_any(AuthorVisitor{})
+}
+
+fn de_link<'de, D>(deserializer: D) -> Result<Vec<LinkField>, D::Error> 
+where 
+    D: Deserializer<'de>,
+{
+    struct LinkVisitor;
+    impl<'de> Visitor<'de> for LinkVisitor {
+        type Value = Vec<LinkField>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("Map of children elements - filtering for field: `link`")
+        }
+
+        fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+        where
+            M: MapAccess<'de>,
+        {
+            let mut links = Vec::<LinkField>::new();
+            while let Some(key) = access.next_key::<String>()? {
+                if key == "link" {
+                    let var = access.next_value::<LinkField>().unwrap();
+                    links.push(var);
+                }
+            };
+            Ok(links)
+        }
+    }
+    deserializer.deserialize_any(LinkVisitor{})
 }
 
 // end Arxiv Raw XML Model
@@ -174,14 +263,14 @@ mod tests {
     const ACTUAL: &str = concat!(
         "https://export.arxiv.org/api/query/",
         "?search_query=%28cat:cs.CL+OR+cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.MA%29+AND+",
-        "submittedDate:[202412300000+TO+202412310000]&max_results=500"
+        "submittedDate:[202412300000+TO+202412310000]&start=0&max_results=500"
     );
 
     #[test]
     fn test_url_generation() {
         let date = Utc.with_ymd_and_hms(2025, 1, 1, 0, 0, 1).unwrap();
         let parser = ArxivParser::new(Config::default());
-        let url = parser.create_query_url(Some(date));
+        let url = parser.create_query_url(Some(date), 0);
         assert_eq!(url, ACTUAL, "URL improperly formatted");
     }
 }

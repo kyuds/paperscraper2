@@ -4,6 +4,7 @@ use std::{env, process};
 #[derive(Debug)]
 pub struct Config {
     pub num_entries: i32,
+    pub num_pages: i32,
     pub date_offset: i32,
     pub categories: Vec<String>,
 }
@@ -12,7 +13,8 @@ pub struct Config {
 impl Config {
     pub fn default() -> Self {
         Config {
-            num_entries: 500,
+            num_entries: 50,
+            num_pages: 10,
             date_offset: 1,
             categories: vec![
                 String::from("cs.CL"),
@@ -23,9 +25,10 @@ impl Config {
         }
     }
 
-    pub fn new(num_entries: i32, date_offset: i32, categories: Vec<String>) -> Self {
+    pub fn new(num_entries: i32, num_pages: i32, date_offset: i32, categories: Vec<String>) -> Self {
         Config {
             num_entries,
+            num_pages,
             date_offset,
             categories
         }
@@ -34,13 +37,14 @@ impl Config {
     pub fn from_env() -> Self {
         dotenvy::from_filename("paperscraper.env").unwrap();
         let num_entries = get_positive_i32_from_env("NUM_ENTRIES");
+        let num_pages = get_positive_i32_from_env("NUM_PAGES");
         let date_offset = get_positive_i32_from_env("DATE_OFFSET");
         let categories: Vec<String> = env::var("CATEGORIES")
             .expect("CATEGORIES not found in env")
             .split_whitespace()
             .map(String::from)
             .collect();
-        Self::new(num_entries, date_offset, categories)
+        Self::new(num_entries, num_pages, date_offset, categories)
     }
 }
 

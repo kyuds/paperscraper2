@@ -6,5 +6,7 @@ use arxiv::{
 fn main() {
     let config = Config::from_env();
     let parser = ArxivParser::new(config);
-    println!("{:?}", parser.get_arxiv_results(None));
+    let results = parser.get_arxiv_results(None);
+    println!("# results: {}", results.len());
+    println!("{:?}", results[10]);
 }
