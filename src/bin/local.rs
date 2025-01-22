@@ -1,4 +1,4 @@
-use arxiv::{
+use paperscraper2::{
     config::Config,
     parser::ArxivParser
 };
@@ -8,5 +8,5 @@ fn main() {
     let parser = ArxivParser::new(config);
     let results = parser.get_arxiv_results(None);
     println!("# results: {}", results.len());
-    println!("{:?}", results[10]);
+    println!("{:?}", results);
 }

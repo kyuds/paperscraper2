@@ -86,8 +86,8 @@ impl ArxivParser {
             if page_results.is_empty() {
                 break;
             }
-            results.append(&mut page_results);
             println!("epoch {}, documents {}", page, page_results.len());
+            results.append(&mut page_results);
         }
         results
     }
