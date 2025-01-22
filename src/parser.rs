@@ -124,7 +124,7 @@ impl ArxivResult {
             });
 
         Self::new(
-            entry.title, 
+            entry.title.replace("\n", " "), 
             entry.summary.replace("\n", " "), 
             entry.authors.into_iter().map(|a| a.name.value).collect::<Vec<_>>(), 
             published, 

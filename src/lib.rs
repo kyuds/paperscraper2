@@ -1,3 +1,4 @@
 pub mod config;
-mod prompt;
+pub mod utils;
 pub mod parser;
+mod prompt;
