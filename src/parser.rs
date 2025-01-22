@@ -26,9 +26,15 @@ pub struct ArxivParser {
 }
 
 impl ArxivParser {
-    pub fn new(config: Config) -> Self {
+    pub fn from_config(config: Config) -> Self {
         ArxivParser {
             config
+        }
+    }
+
+    pub fn new() -> Self {
+        ArxivParser {
+            config: Config::default()
         }
     }
 
@@ -263,13 +269,13 @@ mod tests {
     const ACTUAL: &str = concat!(
         "https://export.arxiv.org/api/query/",
         "?search_query=%28cat:cs.CL+OR+cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.MA%29+AND+",
-        "submittedDate:[202412300000+TO+202412310000]&start=0&max_results=500"
+        "submittedDate:[202412300000+TO+202412310000]&start=0&max_results=50"
     );
 
     #[test]
     fn test_url_generation() {
         let date = Utc.with_ymd_and_hms(2025, 1, 1, 0, 0, 1).unwrap();
-        let parser = ArxivParser::new(Config::default());
+        let parser = ArxivParser::new();
         let url = parser.create_query_url(Some(date), 0);
         assert_eq!(url, ACTUAL, "URL improperly formatted");
     }

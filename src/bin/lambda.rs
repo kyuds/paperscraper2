@@ -1,9 +1,6 @@
 use lambda_runtime::{service_fn, LambdaEvent, Error as LambdaError};
 
-use paperscraper2::{
-    config::Config,
-    parser::ArxivParser
-};
+use paperscraper2::parser::ArxivParser;
 
 #[tokio::main]
 async fn main() -> Result<(), LambdaError> {
@@ -13,8 +10,7 @@ async fn main() -> Result<(), LambdaError> {
 }
 
 async fn func(_event: LambdaEvent<()>) -> Result<(), LambdaError> {
-    let config = Config::default();
-    let parser = ArxivParser::new(config);
+    let parser = ArxivParser::new();
     let arxiv_data = parser.get_arxiv_results(None);
     Ok(())
 }
