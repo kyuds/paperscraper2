@@ -14,3 +14,4 @@ lambda_runtime = "0.13.0"
 aws-config = { version = "1.5.14", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "1.70.0"
 aws-sdk-bedrock = "1.70.0"
+serde_json = "1.0.137"
