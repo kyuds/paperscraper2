@@ -23,3 +23,6 @@ target/
 # File Output Testing
 arxiv.md
 arxiv.jsonl
+
+# Local Testing for AWS
+local_aws.env

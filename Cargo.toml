@@ -6,10 +6,11 @@ edition = "2021"
 [dependencies]
 chrono = "0.4.39"
 dotenvy = "0.15.7"
-reqwest = { version = "0.12.12", features = ["blocking"] }
+reqwest = "0.12.12"
 quick-xml = { version = "0.37.2", features = ["serialize"] }
 serde = { version = "1.0.217", features = ["derive"] }
 tokio = { version = "1.43.0", features = ["full"] }
 lambda_runtime = "0.13.0"
 aws-config = { version = "1.5.14", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "1.70.0"
+aws-sdk-bedrock = "1.70.0"

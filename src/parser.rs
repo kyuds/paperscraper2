@@ -3,7 +3,7 @@ use std::{
     option::Option
 };
 use chrono::{DateTime, Duration, TimeZone, Utc};
-use reqwest;
+use reqwest::Client;
 use quick_xml::de::from_str;
 use serde::{
     de::{Visitor, MapAccess}, 
@@ -22,19 +22,22 @@ macro_rules! arxiv_url {
 
 #[derive(Debug)]
 pub struct ArxivParser {
-    config: Config
+    config: Config,
+    client: Client
 }
 
 impl ArxivParser {
     pub fn from_config(config: Config) -> Self {
         ArxivParser {
-            config
+            config,
+            client: Client::new()
         }
     }
 
     pub fn new() -> Self {
         ArxivParser {
-            config: Config::default()
+            config: Config::default(),
+            client: Client::new()
         }
     }
 
@@ -55,29 +58,29 @@ impl ArxivParser {
         format!(arxiv_url!(), categories, d0, d1, start, self.config.num_entries)
     }
 
-    fn get_raw_xml(&self, date: Option<DateTime<Utc>>, start: i32) -> String {
+    async fn get_raw_xml(&self, date: Option<DateTime<Utc>>, start: i32) -> String {
         let url = self.create_query_url(date, start);
-        let response = match reqwest::blocking::get(url) {
-            Ok(response) => response,
+
+        match self.client.get(url).send().await {
+            Ok(response) => match response.text().await {
+                Ok(body) => body,
+                Err(e) => {
+                    eprintln!("Failed to read response body: {}", e);
+                    String::new()
+                }
+            },
             Err(e) => {
                 eprintln!("Failed to fetch data: {}", e);
-                return String::new();
-            }
-        };
-        match response.text() {
-            Ok(body) => body,
-            Err(e) => {
-                eprintln!("Failed to read response body: {}", e);
-                return String::new();
+                String::new()
             }
         }
     }
 
-    pub fn get_arxiv_results(&self, date: Option<DateTime<Utc>>) -> Vec<ArxivResult> {
+    pub async fn get_arxiv_results(&self, date: Option<DateTime<Utc>>) -> Vec<ArxivResult> {
         let mut results: Vec<ArxivResult> = Vec::new();
         for page in 0..self.config.num_pages {
             let start = self.config.num_entries * page;
-            let xml = self.get_raw_xml(date, start);
+            let xml = self.get_raw_xml(date, start).await;
             let parsed: ArxivDocument = match from_str(xml.as_str()) {
                 Ok(result) => result,
                 Err(e) => {
