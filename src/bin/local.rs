@@ -43,6 +43,7 @@ async fn write_results_s3(data: &Vec<ArxivResult>) {
         &data).await.unwrap();
     println!("{:?}", result);
 
+    let key = "local/bedrock.jsonl";
     let result = s3_storage.upload_bedrock_inputs(
         bucket.as_str(), 
         key, 
