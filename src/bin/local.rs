@@ -3,7 +3,7 @@ use dotenvy;
 use aws_config::Region;
 use aws_sdk_s3::Client as S3Client;
 use paperscraper2::{
-    config::Config,
+    config::ArxivConfig,
     model::ArxivResult,
     parser::ArxivParser,
     storage::S3Storage
@@ -12,7 +12,7 @@ use paperscraper2::{
 #[tokio::main]
 async fn main() -> io::Result<()> {
     // get arxiv data
-    let config = Config::from_env();
+    let config = ArxivConfig::from_env();
     let parser = ArxivParser::from_config(config);
     let results = parser.get_arxiv_results(None).await;
     println!("# results: {}", results.len());
@@ -38,6 +38,12 @@ async fn write_results_s3(data: &Vec<ArxivResult>) {
 
     let key = "local/arxiv.jsonl";
     let result = s3_storage.upload_raw_arxiv_as_jsonl(
+        bucket.as_str(), 
+        key, 
+        &data).await.unwrap();
+    println!("{:?}", result);
+
+    let result = s3_storage.upload_bedrock_inputs(
         bucket.as_str(), 
         key, 
         &data).await.unwrap();

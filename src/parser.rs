@@ -18,7 +18,7 @@ use serde::{
 };
 
 use crate::{
-    config::Config,
+    config::ArxivConfig,
     model::ArxivResult
 };
 
@@ -31,12 +31,12 @@ macro_rules! arxiv_url {
 
 #[derive(Debug)]
 pub struct ArxivParser {
-    config: Config,
+    config: ArxivConfig,
     client: Client
 }
 
 impl ArxivParser {
-    pub fn from_config(config: Config) -> Self {
+    pub fn from_config(config: ArxivConfig) -> Self {
         ArxivParser {
             config,
             client: Client::new()
@@ -45,7 +45,7 @@ impl ArxivParser {
 
     pub fn new() -> Self {
         ArxivParser {
-            config: Config::default(),
+            config: ArxivConfig::default(),
             client: Client::new()
         }
     }
@@ -88,6 +88,7 @@ impl ArxivParser {
     pub async fn get_arxiv_results(&self, date: Option<DateTime<Utc>>) -> Vec<ArxivResult> {
         println!("using query url: {}", self.create_query_url(date, 0));
         let mut results: Vec<ArxivResult> = Vec::new();
+        let mut id: usize = 0;
         for page in 0..self.config.num_pages {
             let start = self.config.num_entries * page;
             let xml = self.get_raw_xml(date, start).await;
@@ -101,9 +102,10 @@ impl ArxivParser {
             };
             let mut page_results = parsed.entries
                 .into_iter()
-                .enumerate()
-                .map(|(id, entry)| {
-                    ArxivResult::from_entry(id, entry)
+                .map(|entry| {
+                    let mapped = ArxivResult::from_entry(id, entry);
+                    id += 1;
+                    mapped
                 })
                 .collect::<Vec<_>>();
             if page_results.is_empty() {

@@ -14,9 +14,13 @@ use aws_sdk_s3::{
     Client as S3Client
 };
 use serde_json::{self, Error as JsonError};
+use serde::Serialize;
 use uuid::Uuid;
 
-use crate::model::ArxivResult;
+use crate::{
+    model::ArxivResult,
+    prompt::PROMPT
+};
 
 // Utils to store (temporary) files on local device.
 // When using with AWS Lambda, these local files (in /tmp) will automatically be
@@ -25,14 +29,14 @@ use crate::model::ArxivResult;
 struct Formatter;
 
 impl Formatter {
-    fn to_readme(data: &ArxivResult) -> String {
-        format!("### {}\n_{}_<br/>\n{}<br/>\n_Published: {}_, [{}]({})\n\n",
+    fn to_readme(data: &ArxivResult) -> Result<String, JsonError> {
+        Ok(format!("### {}\n_{}_<br/>\n{}<br/>\n_Published: {}_, [{}]({})\n\n",
             data.title,
             data.authors.join(", "),
             data.summary,
             data.published.format("%Y.%m.%d"),
             data.link, data.link
-        )
+        ))
     }
 
     fn to_jsonl(data: &ArxivResult) -> Result<String, JsonError> {
@@ -40,34 +44,30 @@ impl Formatter {
         Ok(format!("{}\n", jstring))
     }
 
-    // pub fn to_bedrock_input
+    fn to_bedrock_input(data: &ArxivResult) -> Result<String, JsonError> {
+        let batch_request = BatchRequest::new(data);
+        let jstring = serde_json::to_string(&batch_request)?;
+        Ok(format!("{}\n", jstring))
+    }
 }
 
-fn save_raw_arxiv_as_readme(fname: &str, data: &Vec<ArxivResult>) -> io::Result<()> {
-    let mut file = File::create(fname)?;
-    data.iter()
-        .try_for_each(|result| -> io::Result<()> {
-            file.write_all(Formatter::to_readme(result).as_bytes())?;
-            Ok(())
-        })?;
-    file.flush()?;
-    Ok(())
-}
-
-fn save_raw_arxiv_as_jsonl(fname: &str, data: &Vec<ArxivResult>) -> io::Result<()> {
+fn save_arxiv_as_file<F>(fname: &str, op: F, data: &Vec<ArxivResult>) -> io::Result<()>
+where
+    F: Fn(&ArxivResult) -> Result<String, JsonError>
+{
     let mut file = File::create(fname)?;
     data.iter()
         .filter_map(|data| {
-            match Formatter::to_jsonl(data) {
+            match op(data) {
                 Ok(v) => Some(v),
                 Err(e) => {
                     eprintln!("serde_json error: {}", e);
-                    return None;
+                    None
                 }
             }
         })
-        .try_for_each(|jsonl| -> io::Result<()> {
-            file.write_all(jsonl.as_bytes())?;
+        .try_for_each(|line| -> io::Result<()> {
+            file.write_all(line.as_bytes())?;
             Ok(())
         })?;
     file.flush()?;
@@ -100,7 +100,7 @@ impl S3Storage {
         data: &Vec<ArxivResult>
     ) -> Result<PutObjectOutput, StorageError> {
         let tmp_file = self.get_fname("readme", "md");
-        save_raw_arxiv_as_readme(&tmp_file, data)?;
+        save_arxiv_as_file(&tmp_file, Formatter::to_readme, data)?;
         self.upload(bucket, key, &tmp_file).await
     }
 
@@ -111,7 +111,18 @@ impl S3Storage {
         data: &Vec<ArxivResult>
     ) -> Result<PutObjectOutput, StorageError> {
         let tmp_file = self.get_fname("raw", "jsonl");
-        save_raw_arxiv_as_jsonl(&tmp_file, data)?;
+        save_arxiv_as_file(&tmp_file, Formatter::to_jsonl, data)?;
+        self.upload(bucket, key, &tmp_file).await
+    }
+
+    pub async fn upload_bedrock_inputs(
+        &self,
+        bucket: &str,
+        key: &str,
+        data: &Vec<ArxivResult>
+    ) -> Result<PutObjectOutput, StorageError> {
+        let tmp_file = self.get_fname("bedrock", "jsonl");
+        save_arxiv_as_file(&tmp_file, Formatter::to_bedrock_input, data)?;
         self.upload(bucket, key, &tmp_file).await
     }
 
@@ -181,6 +192,93 @@ impl From<ByteStreamError> for StorageError {
     }
 }
 
+// utils: batch invocation data format with serde, specifically for Amazon Nova Lite
+
+#[derive(Debug, Serialize)]
+struct BatchRequest {
+    #[serde(rename = "recordId")]
+    record_id: String,
+    #[serde(rename = "modelInput")]
+    model_input: ModelInput
+}
+
+#[derive(Debug, Serialize)]
+struct ModelInput {
+    #[serde(rename = "schemaVersion")]
+    schema_version: String, // "messages-v1"
+    messages: Vec<UserPrompts>,
+    system: Vec<BedrockContent>,
+    #[serde(rename = "inferenceConfig")]
+    inference_config: InferenceConfig
+}
+
+#[derive(Debug, Serialize)]
+struct UserPrompts {
+    role: String, // "user"
+    content: Vec<BedrockContent>
+}
+
+#[derive(Debug, Serialize)]
+struct BedrockContent {
+    text: String
+}
+
+#[derive(Debug, Serialize)]
+struct InferenceConfig {
+    max_new_tokens: u32, // 150
+    top_p: f32, // 0.9
+    top_k: u32, // 20
+    temperature: f32 // 0.5
+}
+
+impl BatchRequest {
+    fn new(data: &ArxivResult) -> Self {
+        BatchRequest {
+            record_id: data.record_id(),
+            model_input: ModelInput::new(PROMPT, &data.summary)
+        }
+    }
+}
+
+impl ModelInput {
+    fn new(system: &str, content: &str) -> Self {
+        ModelInput {
+            schema_version: "messages-v1".to_string(),
+            messages: vec![UserPrompts::new(content.to_string())],
+            system: vec![BedrockContent::new(system.to_string())],
+            inference_config: InferenceConfig::default()
+        }
+    }
+}
+
+impl UserPrompts {
+    fn new(content: String) -> Self {
+        UserPrompts {
+            role: "user".to_string(),
+            content: vec![BedrockContent::new(content)]
+        }
+    }
+}
+
+impl BedrockContent {
+    fn new(text: String) -> Self {
+        BedrockContent {
+            text
+        }
+    }
+}
+
+impl InferenceConfig {
+    fn default() -> Self {
+        InferenceConfig {
+            max_new_tokens: 150,
+            top_p: 0.9,
+            top_k: 20,
+            temperature: 0.5
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -211,7 +309,7 @@ mod tests {
     #[test]
     fn test_readme() {
         let base = String::from(BASE_README);
-        let readme = Formatter::to_readme(&get_sample_arxiv());
+        let readme = Formatter::to_readme(&get_sample_arxiv()).unwrap();
         assert_eq!(base, readme);
     }
 
