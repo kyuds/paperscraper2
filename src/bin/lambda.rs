@@ -5,7 +5,7 @@ use lambda_runtime::{service_fn, LambdaEvent, Error as LambdaError};
 use serde_json::Value;
 
 use paperscraper2::{
-    storage::S3Saver,
+    storage::S3Storage,
     parser::ArxivParser,
     config::Config
 };
@@ -33,9 +33,9 @@ async fn func(_event: LambdaEvent<Value>) -> Result<(), LambdaError> {
         .load()
         .await;
     let client = S3Client::new(&conf);
+    let s3_storage = S3Storage::default(client);
 
-    let _result = S3Saver::upload_raw_arxiv_as_jsonl(
-        &client, 
+    let _result = s3_storage.upload_raw_arxiv_as_jsonl(
         bucket.as_str(), 
         key.as_str(), 
         &data).await?;

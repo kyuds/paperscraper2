@@ -14,11 +14,13 @@ use quick_xml;
 use serde::{
     de::{Visitor, MapAccess}, 
     Deserialize, 
-    Deserializer,
-    Serialize
+    Deserializer
 };
 
-use crate::config::Config;
+use crate::{
+    config::Config,
+    model::ArxivResult
+};
 
 macro_rules! arxiv_url {
     () => { concat!(
@@ -97,8 +99,12 @@ impl ArxivParser {
                     ArxivDocument::default()
                 }
             };
-            let mut page_results = parsed.entries.into_iter()
-                .map(ArxivResult::from_entry)
+            let mut page_results = parsed.entries
+                .into_iter()
+                .enumerate()
+                .map(|(id, entry)| {
+                    ArxivResult::from_entry(id, entry)
+                })
                 .collect::<Vec<_>>();
             if page_results.is_empty() {
                 break;
@@ -110,20 +116,12 @@ impl ArxivParser {
     }
 }
 
-// Arxiv Data Model
-
-#[derive(Debug, Serialize)]
-pub struct ArxivResult {
-    pub title: String,
-    pub summary: String,
-    pub authors: Vec<String>,
-    pub published: DateTime<Utc>,
-    pub link: String
-}
+// Arxiv Data Model Impl
 
 impl ArxivResult {
-    fn new(title: String, summary: String, authors: Vec<String>, published: DateTime<Utc>, link: String) -> Self {
+    fn new(id: usize, title: String, summary: String, authors: Vec<String>, published: DateTime<Utc>, link: String) -> Self {
         ArxivResult {
+            id,
             title,
             summary,
             authors,
@@ -132,7 +130,7 @@ impl ArxivResult {
         }
     }
 
-    fn from_entry(entry: ArxivEntry) -> Self {
+    fn from_entry(id: usize, entry: ArxivEntry) -> Self {
         let re = Regex::new(r"\s+").unwrap();
         let published: DateTime<Utc> = DateTime::parse_from_rfc3339(&entry.published)
             .map(|dt| dt.with_timezone(&Utc)) 
@@ -142,6 +140,7 @@ impl ArxivResult {
             });
 
         Self::new(
+            id,
             re.replace_all(entry.title.as_str(), " ").to_string(), 
             re.replace_all(entry.summary.as_str(), " ").to_string(), 
             entry.authors.into_iter().map(|a| a.name.value).collect::<Vec<_>>(), 
@@ -157,7 +156,7 @@ impl ArxivResult {
     }
 }
 
-// end Arxiv Data Model
+// end Arxiv Data Model Impl
 
 // Arxiv Raw XML Model
 

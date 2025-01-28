@@ -4,8 +4,9 @@ use aws_config::Region;
 use aws_sdk_s3::Client as S3Client;
 use paperscraper2::{
     config::Config,
-    parser::{ArxivParser, ArxivResult},
-    storage::{LocalSaver, S3Saver}
+    model::ArxivResult,
+    parser::ArxivParser,
+    storage::S3Storage
 };
 
 #[tokio::main]
@@ -15,17 +16,10 @@ async fn main() -> io::Result<()> {
     let parser = ArxivParser::from_config(config);
     let results = parser.get_arxiv_results(None).await;
     println!("# results: {}", results.len());
-    
-    // // write arxiv data to local storage and AWS S3
-    write_results_local(&results)?;
-    write_results_s3(&results).await;
-
-    Ok(())
-}
-
-fn write_results_local(data: &Vec<ArxivResult>) -> io::Result<()> {
-    LocalSaver::save_raw_arxiv_results_as_readme("arxiv.md", data)?;
-    LocalSaver::save_raw_arxiv_as_jsonl("arxiv.jsonl", data)?;
+    if results.len() > 0 {
+        // write arxiv data to AWS S3
+        write_results_s3(&results).await;
+    }
     Ok(())
 }
 
@@ -40,9 +34,10 @@ async fn write_results_s3(data: &Vec<ArxivResult>) {
         .await;
 
     let client = S3Client::new(&conf);
-    let key = "raw/arxiv.jsonl";
-    let result = S3Saver::upload_raw_arxiv_as_jsonl(
-        &client, 
+    let s3_storage = S3Storage::new(client, false);
+
+    let key = "local/arxiv.jsonl";
+    let result = s3_storage.upload_raw_arxiv_as_jsonl(
         bucket.as_str(), 
         key, 
         &data).await.unwrap();

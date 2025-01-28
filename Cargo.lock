@@ -200,14 +200,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "aws-sdk-bedrock"
-version = "1.70.0"
+name = "aws-sdk-bedrockruntime"
+version = "1.71.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "760151f29fa5f27d3719ba32eedac4deb8f95ee1aa4e956590dbde87623b0a13"
+checksum = "d3df63bb064f19fc4b5af78db35ad514b08a54e2fe3109d049f9831a9afec851"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-smithy-async",
+ "aws-smithy-eventstream",
  "aws-smithy-http",
  "aws-smithy-json",
  "aws-smithy-runtime",
@@ -1823,7 +1824,7 @@ name = "paperscraper2"
 version = "0.1.0"
 dependencies = [
  "aws-config",
- "aws-sdk-bedrock",
+ "aws-sdk-bedrockruntime",
  "aws-sdk-s3",
  "chrono",
  "dotenvy",
@@ -1834,6 +1835,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -2853,6 +2855,9 @@ name = "uuid"
 version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b3758f5e68192bb96cc8f9b7e2c2cfdabb435499a28499a42f8f984092adad4b"
+dependencies = [
+ "getrandom",
+]
 
 [[package]]
 name = "valuable"

@@ -21,8 +21,8 @@ target/
 #.idea/
 
 # File Output Testing
-arxiv.md
-arxiv.jsonl
+*.md
+*.jsonl
 
 # Local Testing for AWS
 local_aws.env
