@@ -1,3 +1,5 @@
+use serde_json::{self, json, Error};
+
 use crate::parser::ArxivResult;
 
 pub struct Formatter;
@@ -13,17 +15,24 @@ impl Formatter {
         )
     }
 
-    pub fn to_jsonl_with_id(id: usize, data: &ArxivResult) -> String {
-        format!(
-            concat!("{{\"id\": {}, \"title\": \"{}\", \"authors\": [{}], ",
-                    "\"summary\": \"{}\", \"pub\": \"{}\", \"link\": \"{}\"}}\n"),
-            id,
-            data.title,
-            data.authors.iter().map(|a| { format!("\"{}\"", a)}).collect::<Vec<_>>().join(", "),
-            data.summary,
-            data.published.format("%Y.%m.%d"),
-            data.link
-        )
+    pub fn to_jsonl_with_id(id: usize, data: &ArxivResult) -> Result<String, Error> {
+        let mut jobject = serde_json::to_value(data)?;
+        if let Some(map) = jobject.as_object_mut() {
+            map.insert("id".to_string(), json!(id));
+        }
+        let jstring = serde_json::to_string(&jobject)?;
+        Ok(format!("{}\n", jstring))
+
+        // format!(
+        //     concat!("{{\"id\": {}, \"title\": \"{}\", \"authors\": [{}], ",
+        //             "\"summary\": \"{}\", \"pub\": \"{}\", \"link\": \"{}\"}}\n"),
+        //     id,
+        //     data.title,
+        //     data.authors.iter().map(|a| { format!("\"{}\"", a)}).collect::<Vec<_>>().join(", "),
+        //     data.summary,
+        //     data.published.format("%Y.%m.%d"),
+        //     data.link
+        // )
     }
 
     // pub fn to_bedrock_input
@@ -51,8 +60,8 @@ mod tests {
     );
 
     const BASE_JSONL: &str = concat!(
-        "{\"id\": 0, \"title\": \"title\", \"authors\": [\"john doe\"], \"summary\": \"summary\", ",
-        "\"pub\": \"1970.01.01\", \"link\": \"www.example.com\"}\n"
+       "{\"authors\":[\"john doe\"],\"id\":0,\"link\":\"www.example.com\",\"published\":\"1970-01-01T00:00:00Z\",",
+       "\"summary\":\"summary\",\"title\":\"title\"}\n"
     );
 
     #[test]
@@ -65,7 +74,7 @@ mod tests {
     #[test]
     fn test_jsonl() {
         let base = String::from(BASE_JSONL);
-        let jsonl = Formatter::to_jsonl_with_id(0, &get_sample_arxiv());
+        let jsonl = Formatter::to_jsonl_with_id(0, &get_sample_arxiv()).unwrap();
         assert_eq!(base, jsonl);
     }
 }

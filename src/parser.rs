@@ -2,13 +2,20 @@ use std::{
     fmt,
     option::Option
 };
-use chrono::{DateTime, Duration, TimeZone, Utc};
+use chrono::{
+    DateTime, 
+    Duration, 
+    TimeZone, 
+    Utc
+};
 use reqwest::Client;
-use quick_xml::de::from_str;
+use regex::Regex;
+use quick_xml;
 use serde::{
     de::{Visitor, MapAccess}, 
     Deserialize, 
-    Deserializer
+    Deserializer,
+    Serialize
 };
 
 use crate::config::Config;
@@ -77,11 +84,12 @@ impl ArxivParser {
     }
 
     pub async fn get_arxiv_results(&self, date: Option<DateTime<Utc>>) -> Vec<ArxivResult> {
+        println!("using query url: {}", self.create_query_url(date, 0));
         let mut results: Vec<ArxivResult> = Vec::new();
         for page in 0..self.config.num_pages {
             let start = self.config.num_entries * page;
             let xml = self.get_raw_xml(date, start).await;
-            let parsed: ArxivDocument = match from_str(xml.as_str()) {
+            let parsed: ArxivDocument = match quick_xml::de::from_str(xml.as_str()) {
                 Ok(result) => result,
                 Err(e) => {
                     eprintln!("Failed to parse xml data: {}", e);
@@ -104,7 +112,7 @@ impl ArxivParser {
 
 // Arxiv Data Model
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ArxivResult {
     pub title: String,
     pub summary: String,
@@ -125,6 +133,7 @@ impl ArxivResult {
     }
 
     fn from_entry(entry: ArxivEntry) -> Self {
+        let re = Regex::new(r"\s+").unwrap();
         let published: DateTime<Utc> = DateTime::parse_from_rfc3339(&entry.published)
             .map(|dt| dt.with_timezone(&Utc)) 
             .unwrap_or_else(|_err| {
@@ -133,8 +142,8 @@ impl ArxivResult {
             });
 
         Self::new(
-            entry.title.replace("\n", " "), 
-            entry.summary.replace("\n", " "), 
+            re.replace_all(entry.title.as_str(), " ").to_string(), 
+            re.replace_all(entry.summary.as_str(), " ").to_string(), 
             entry.authors.into_iter().map(|a| a.name.value).collect::<Vec<_>>(), 
             published, 
             entry.links.into_iter()

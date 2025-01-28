@@ -20,19 +20,19 @@ async fn main() -> Result<(), LambdaError> {
 // when testing, lambda functions cannot accept LambdaEvent<()>
 async fn func(_event: LambdaEvent<Value>) -> Result<(), LambdaError> {
     let parser_config = Config::default();
+    let offset = parser_config.date_offset;
+    let parser = ArxivParser::from_config(parser_config);
+    let data = parser.get_arxiv_results(None).await;
 
     let region = get_env_string("REGION");
     let bucket = get_env_string("BUCKET");
-    let key = get_s3_key(parser_config.date_offset as i64);
+    let key = get_s3_key(offset as i64);
 
     let conf = aws_config::from_env()
         .region(Region::new(region))
         .load()
         .await;
     let client = S3Client::new(&conf);
-    
-    let parser = ArxivParser::from_config(parser_config);
-    let data = parser.get_arxiv_results(None).await;
 
     let _result = S3Saver::upload_raw_arxiv_as_jsonl(
         &client, 

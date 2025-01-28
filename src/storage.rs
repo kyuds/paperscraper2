@@ -30,8 +30,17 @@ impl LocalSaver {
 
     pub fn save_raw_arxiv_as_jsonl(fname: &str, data: &Vec<ArxivResult>) -> io::Result<()> {
         let mut file = File::create(fname)?;
-        data.iter().enumerate().try_for_each(|(id, result)| -> io::Result<()> {
-            file.write_all(Formatter::to_jsonl_with_id(id, result).as_bytes())?;
+        data.iter().enumerate().filter_map(|(id, result)| {
+            match Formatter::to_jsonl_with_id(id, result) {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    eprintln!("serde_json error: {}", e);
+                    return None;
+                }
+            }
+        })
+        .try_for_each(|jsonl| -> io::Result<()> {
+            file.write_all(jsonl.as_bytes())?;
             Ok(())
         })?;
         Ok(())
@@ -54,8 +63,14 @@ impl S3Saver {
 
         let bytes = data.iter()
             .enumerate()
-            .map(|(id, arxiv)| { 
-                Formatter::to_jsonl_with_id(id, arxiv) 
+            .filter_map(|(id, arxiv)| { 
+                match Formatter::to_jsonl_with_id(id, arxiv) {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        eprintln!("serde_json error: {}", e);
+                        return None; // skip for now
+                    }
+                }
             })
             .collect::<Vec<_>>()
             .join("");
