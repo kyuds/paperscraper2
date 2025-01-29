@@ -27,5 +27,5 @@ target/
 # Local Testing for AWS
 local_aws.env
 
-# AWS Lambda Packaing
-lambda.zip
+# AWS Lambda Packaging
+*.zip

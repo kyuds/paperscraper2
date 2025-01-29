@@ -113,6 +113,7 @@ impl ArxivParser {
             }
             println!("epoch {}, documents {}", page, page_results.len());
             results.append(&mut page_results);
+            break; // TODO delete
         }
         results
     }

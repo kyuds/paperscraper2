@@ -17,19 +17,4 @@ impl ArxivResult {
     pub fn record_id(&self) -> String {
         format!("ARXIV{:06}", self.id)
     }
-
-    // pub fn id_from_record_id(rid: &str) -> Option<usize> {
-    //     if let Some(stripped) = rid.strip_prefix("ARXIV") {
-    //         match stripped.parse::<usize>() {
-    //             Ok(n) => Some(n),
-    //             Err(e) => {
-    //                 eprintln!("Failed to convert record id ({}): {}", rid, e);
-    //                 None
-    //             },
-    //         }
-    //     } else {
-    //         eprintln!("No prefix (ARXIV) found: {}", rid);
-    //         None
-    //     }
-    // }
 }

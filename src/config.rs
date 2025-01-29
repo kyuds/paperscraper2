@@ -2,9 +2,8 @@ use dotenvy;
 use std::{env, process};
 use chrono::Utc;
 
-const RAW_FOLDER_PREFIX: &str = "/raw";
-const BEDROCK_INPUT_FOLDER_PREFIX: &str = "/bedrock-input";
-const BATCH_JOB_PREFIX: &str = "paperscraper_batch_";
+const RAW_FOLDER_PREFIX: &str = "raw";
+const PROCESSED_FOLDER_PREFIX: &str = "processed";
 
 #[derive(Debug)]
 pub struct ArxivConfig {
@@ -67,37 +66,28 @@ fn get_positive_i32_from_env(key: &str) -> i32 {
 
 #[derive(Debug)]
 pub struct NameConfig {
+    pub bucket: String,
     key: String
 }
 
 impl NameConfig {
-    pub fn new(key: String) -> Self {
+    pub fn new(bucket: &str, key: &str) -> Self {
         NameConfig {
-            key
+            bucket: bucket.to_string(),
+            key: key.to_string()
         }
     }
 
-    pub fn default() -> Self {
+    pub fn default(bucket: &str) -> Self {
         let key = Utc::now().format("%y%m%d%H%M%S").to_string();
-        Self::new(key)
-    }
-
-    pub fn from_job_name(name: &str) -> Self {
-        match name.strip_prefix(BATCH_JOB_PREFIX) {
-            Some(key) => Self::new(key.to_string()),
-            None => panic!("invalid job name: {}. Doesn't start with BATCH_JOB_PREFIX ", name)
-        }
+        Self::new(bucket, &key)
     }
 
     pub fn raw_jsonl_path(&self) -> String {
         format!("{}/raw_{}.jsonl", RAW_FOLDER_PREFIX, self.key)
     }
 
-    pub fn bedrock_input_path(&self) -> String {
-        format!("{}/input_{}.jsonl", BEDROCK_INPUT_FOLDER_PREFIX, self.key)
-    }
-
-    pub fn batch_job_name(&self) -> String {
-        format!("{}{}", BATCH_JOB_PREFIX, self.key)
+    pub fn processed_jsonl_path(&self) -> String {
+        format!("{}/processed_{}.jsonl", PROCESSED_FOLDER_PREFIX, self.key)
     }
 }

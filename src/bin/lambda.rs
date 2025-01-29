@@ -1,5 +1,6 @@
 use aws_config::Region;
 use aws_sdk_s3::Client as S3Client;
+use aws_sdk_bedrockruntime::Client as BedrockClient;
 use lambda_runtime::{service_fn, LambdaEvent, Error as LambdaError};
 use serde_json::Value;
 
@@ -18,14 +19,14 @@ async fn main() -> Result<(), LambdaError> {
 
 // when testing, lambda functions cannot accept LambdaEvent<()>
 async fn func(_event: LambdaEvent<Value>) -> Result<(), LambdaError> {
-    let parser_config = ArxivConfig::default();
-    let name_config = NameConfig::default();
-    let parser = ArxivParser::from_config(parser_config);
-    let data = parser.get_arxiv_results(None).await;
-
     let region = get_env_string("REGION");
     let bucket = get_env_string("BUCKET");
 
+    let parser_config = ArxivConfig::default();
+    let name_config = NameConfig::default(&bucket);
+    let parser = ArxivParser::from_config(parser_config);
+    let data = parser.get_arxiv_results(None).await;
+    
     let conf = aws_config::from_env()
         .region(Region::new(region))
         .load()
@@ -34,11 +35,9 @@ async fn func(_event: LambdaEvent<Value>) -> Result<(), LambdaError> {
     let s3_storage = S3Storage::default(s3_client);
 
     let _ = s3_storage.upload_raw_arxiv_as_jsonl(
-        bucket.as_str(), 
+        &bucket, 
         &name_config.raw_jsonl_path(), 
         &data).await?;
-
-
 
     Ok(())
 }
@@ -46,4 +45,3 @@ async fn func(_event: LambdaEvent<Value>) -> Result<(), LambdaError> {
 fn get_env_string(key: &str) -> String {
     std::env::var(key).expect(format!("{} not found in env", key).as_str())
 }
-

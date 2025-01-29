@@ -6,4 +6,5 @@ pub const PROMPT: &str =
     with an abstract, write a three sentence summary of the abstract. \
     The summary must be concise, focused on what new things the research \
     tackles, some of the technical details related to the research, \
-    and the key resulting findings of the research.";
+    and the key resulting findings of the research. Remember, the summary \
+    must be concise";

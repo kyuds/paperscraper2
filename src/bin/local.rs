@@ -1,11 +1,13 @@
 use std::{io, env};
 use dotenvy;
 use aws_config::Region;
+use aws_sdk_bedrockruntime::Client as BedrockClient;
 use aws_sdk_s3::Client as S3Client;
 use paperscraper2::{
-    config::ArxivConfig,
-    model::ArxivResult,
-    parser::ArxivParser,
+    agent::BedrockAgent, 
+    config::ArxivConfig, 
+    model::ArxivResult, 
+    parser::ArxivParser, 
     storage::S3Storage
 };
 
@@ -18,12 +20,12 @@ async fn main() -> io::Result<()> {
     println!("# results: {}", results.len());
     if results.len() > 0 {
         // write arxiv data to AWS S3
-        write_results_s3(&results).await;
+        process_results(results).await;
     }
     Ok(())
 }
 
-async fn write_results_s3(data: &Vec<ArxivResult>) {
+async fn process_results(data: Vec<ArxivResult>) {
     dotenvy::from_filename("local_aws.env").unwrap();
     let region = get_env_string("REGION");
     let bucket = get_env_string("BUCKET");
@@ -43,12 +45,11 @@ async fn write_results_s3(data: &Vec<ArxivResult>) {
         &data).await.unwrap();
     println!("{:?}", result);
 
-    let key = "local/bedrock.jsonl";
-    let result = s3_storage.upload_bedrock_inputs(
-        bucket.as_str(), 
-        key, 
-        &data).await.unwrap();
-    println!("{:?}", result);
+    let first = data.into_iter().next().unwrap();
+    let client = BedrockClient::new(&conf);
+    let agent = BedrockAgent::new(client);
+    let summary = agent.summarize(first).await;
+    println!("{:?}", summary);
 }
 
 fn get_env_string(key: &str) -> String {
