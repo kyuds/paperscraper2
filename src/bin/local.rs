@@ -38,20 +38,24 @@ async fn process_results(data: Vec<ArxivResult>) {
     let client = S3Client::new(&conf);
     let s3_storage = S3Storage::new(client, false);
 
-    let key = "local/arxiv.jsonl";
-    let result = s3_storage.upload_raw_arxiv_as_jsonl(
-        bucket.as_str(), 
+    let key = "local/raw.jsonl";
+    let result = s3_storage.upload_arxiv_as_jsonl(
+        &bucket, 
         key, 
         &data).await.unwrap();
     println!("{:?}", result);
 
-    let first = data.into_iter().next().unwrap();
     let client = BedrockClient::new(&conf);
     let agent = BedrockAgent::new(client);
-    let summary = agent.summarize(first).await;
-    println!("{:?}", summary);
+    let data = agent.summarize(data).await;
+    let key = "local/summarized.jsonl";
+    let result = s3_storage.upload_arxiv_as_jsonl(
+        &bucket, 
+        key, 
+        &data).await.unwrap();
+    println!("{:?}", result);
 }
 
 fn get_env_string(key: &str) -> String {
-    env::var(key).expect(format!("{} not found in env", key).as_str())
+    env::var(key).expect(&format!("{} not found in env", key))
 }

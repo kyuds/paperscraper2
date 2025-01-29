@@ -54,7 +54,7 @@ impl ArxivConfig {
 
 fn get_positive_i32_from_env(key: &str) -> i32 {
     let var: i32 = env::var(key)
-        .expect(format!("{} not found in env", key).as_str())
+        .expect(&format!("{} not found in env", key))
         .parse()
         .unwrap_or_else(|_| {
             eprintln!("Failed to parse NUM_ENTRIES as i32");

@@ -5,6 +5,7 @@ use lambda_runtime::{service_fn, LambdaEvent, Error as LambdaError};
 use serde_json::Value;
 
 use paperscraper2::{
+    agent::BedrockAgent,
     config::{ArxivConfig, NameConfig}, 
     parser::ArxivParser, 
     storage::S3Storage
@@ -33,15 +34,23 @@ async fn func(_event: LambdaEvent<Value>) -> Result<(), LambdaError> {
         .await;
     let s3_client = S3Client::new(&conf);
     let s3_storage = S3Storage::default(s3_client);
-
-    let _ = s3_storage.upload_raw_arxiv_as_jsonl(
+    let key = name_config.raw_jsonl_path();
+    let _ = s3_storage.upload_arxiv_as_jsonl(
         &bucket, 
-        &name_config.raw_jsonl_path(), 
+        &key, 
         &data).await?;
 
+    let bedrock_client = BedrockClient::new(&conf);
+    let agent = BedrockAgent::new(bedrock_client);
+    let data = agent.summarize(data).await;
+    let key = name_config.processed_jsonl_path();
+    let _ = s3_storage.upload_arxiv_as_jsonl(
+        &bucket, 
+        &key, 
+        &data).await.unwrap();
     Ok(())
 }
 
 fn get_env_string(key: &str) -> String {
-    std::env::var(key).expect(format!("{} not found in env", key).as_str())
+    std::env::var(key).expect(&format!("{} not found in env", key))
 }

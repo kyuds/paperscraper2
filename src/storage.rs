@@ -94,13 +94,13 @@ impl S3Storage {
         self.upload(bucket, key, &tmp_file).await
     }
 
-    pub async fn upload_raw_arxiv_as_jsonl(
+    pub async fn upload_arxiv_as_jsonl(
         &self,
         bucket: &str,
         key: &str,
         data: &Vec<ArxivResult>
     ) -> Result<PutObjectOutput, StorageError> {
-        let tmp_file = self.get_fname("raw", "jsonl");
+        let tmp_file = self.get_fname("tmp", "jsonl");
         save_arxiv_as_file(&tmp_file, Formatter::to_jsonl, data)?;
         self.upload(bucket, key, &tmp_file).await
     }

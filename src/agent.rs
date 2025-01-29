@@ -11,8 +11,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{self, Error as JsonError};
 use std::{
     error::Error as StdError,
-    fmt
+    fmt, 
+    sync::Arc
 };
+use tokio::task;
 
 use crate::{
     model::ArxivResult,
@@ -23,17 +25,34 @@ use crate::{
 const MODEL_ID: &str = "us.amazon.nova-lite-v1:0";
 
 pub struct BedrockAgent {
-    client: BedrockClient
+    internal: Arc<BedrockAgentInternal>
 }
 
 impl BedrockAgent {
     pub fn new(client: BedrockClient) -> Self {
         BedrockAgent {
+            internal: Arc::new(BedrockAgentInternal::new(client))
+        }
+    }
+
+    pub async fn summarize(&self, data: Vec<ArxivResult>) -> Vec<ArxivResult> {
+        let internal_clone = Arc::clone(&self.internal);
+        internal_clone.concurrent_summarize(data).await
+    }
+}
+
+struct BedrockAgentInternal {
+    client: BedrockClient
+}
+
+impl BedrockAgentInternal {
+    fn new(client: BedrockClient) -> Self {
+        BedrockAgentInternal {
             client
         }
     }
 
-    pub async fn summarize(
+    async fn single_summarize(
         &self, 
         data: ArxivResult
     ) -> Result<ArxivResult, AgentError> {
@@ -51,6 +70,30 @@ impl BedrockAgent {
         
         let response = ModelResponse::from(raw).map_err(AgentError::from)?;
         response.combine_arxiv(data)
+    }
+
+    async fn concurrent_summarize(
+        self: Arc<Self>,
+        data: Vec<ArxivResult>
+    ) -> Vec<ArxivResult> {
+        let handles = data.into_iter()
+            .map(|data| { 
+                let self_clone = Arc::clone(&self);
+                task::spawn(async move {
+                    self_clone.single_summarize(data).await
+                }) 
+            })
+            .collect::<Vec<_>>();
+        
+        let mut results: Vec<ArxivResult> = Vec::new();
+        for handle in handles {
+            match handle.await {
+                Ok(Ok(result)) => results.push(result),
+                Ok(Err(e)) => eprintln!("Agent error: {}", e),
+                Err(e) => eprintln!("Join error: {}", e)
+            }
+        }
+        results
     }
 }
 
@@ -151,7 +194,6 @@ impl ModelResponse {
     fn from(raw: Blob) -> Result<Self, JsonError> {
         let bytes = raw.into_inner();
         let text = String::from_utf8_lossy(&bytes);
-        println!("{}", text);
         serde_json::from_str(&text)
     }
 
@@ -207,6 +249,6 @@ impl From<JsonError> for AgentError {
 
 impl From<SdkError<InvokeModelError, HttpResponse>> for AgentError {
     fn from(err: SdkError<InvokeModelError, HttpResponse>) -> Self {
-        AgentError::new(&format!("AWS SDK error: {}", err))
+        AgentError::new(&format!("AWS SDK error: {}. Details: {:?}", err, err.raw_response()))
     }
 }

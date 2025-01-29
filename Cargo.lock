@@ -200,29 +200,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aws-sdk-bedrock"
-version = "1.71.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fa533bba4e811f7247eb3239929fd888f5b5a45ea6d8b3f8eaa5d47f0910a3d"
-dependencies = [
- "aws-credential-types",
- "aws-runtime",
- "aws-smithy-async",
- "aws-smithy-http",
- "aws-smithy-json",
- "aws-smithy-runtime",
- "aws-smithy-runtime-api",
- "aws-smithy-types",
- "aws-types",
- "bytes",
- "fastrand",
- "http 0.2.12",
- "once_cell",
- "regex-lite",
- "tracing",
-]
-
-[[package]]
 name = "aws-sdk-bedrockruntime"
 version = "1.71.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1847,7 +1824,6 @@ name = "paperscraper2"
 version = "0.1.0"
 dependencies = [
  "aws-config",
- "aws-sdk-bedrock",
  "aws-sdk-bedrockruntime",
  "aws-sdk-s3",
  "chrono",

@@ -92,7 +92,7 @@ impl ArxivParser {
         for page in 0..self.config.num_pages {
             let start = self.config.num_entries * page;
             let xml = self.get_raw_xml(date, start).await;
-            let parsed: ArxivDocument = match quick_xml::de::from_str(xml.as_str()) {
+            let parsed: ArxivDocument = match quick_xml::de::from_str(&xml) {
                 Ok(result) => result,
                 Err(e) => {
                     eprintln!("Failed to parse xml data: {}", e);
@@ -113,7 +113,6 @@ impl ArxivParser {
             }
             println!("epoch {}, documents {}", page, page_results.len());
             results.append(&mut page_results);
-            break; // TODO delete
         }
         results
     }
@@ -144,8 +143,8 @@ impl ArxivResult {
 
         Self::new(
             id,
-            re.replace_all(entry.title.as_str(), " ").to_string(), 
-            re.replace_all(entry.summary.as_str(), " ").to_string(), 
+            re.replace_all(&entry.title, " ").to_string(), 
+            re.replace_all(&entry.summary, " ").to_string(), 
             entry.authors.into_iter().map(|a| a.name.value).collect::<Vec<_>>(), 
             published, 
             entry.links.into_iter()
