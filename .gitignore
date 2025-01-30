@@ -24,8 +24,8 @@ target/
 *.md
 *.jsonl
 
-# Local Testing for AWS
-local_aws.env
+# Local Testing
+local.env
 
 # AWS Lambda Packaging
 *.zip

@@ -1,10 +1,11 @@
 use std::{io, env};
 use dotenvy;
+use async_openai::Client as OpenAIClient;
 use aws_config::Region;
 use aws_sdk_bedrockruntime::Client as BedrockClient;
 use aws_sdk_s3::Client as S3Client;
 use paperscraper2::{
-    agent::BedrockAgent, 
+    agent::{BedrockAgent, OpenAIAgent}, 
     config::ArxivConfig, 
     model::ArxivResult, 
     parser::ArxivParser, 
@@ -26,7 +27,7 @@ async fn main() -> io::Result<()> {
 }
 
 async fn process_results(data: Vec<ArxivResult>) {
-    dotenvy::from_filename("local_aws.env").unwrap();
+    dotenvy::from_filename("local.env").unwrap();
     let region = get_env_string("REGION");
     let bucket = get_env_string("BUCKET");
 
@@ -45,8 +46,14 @@ async fn process_results(data: Vec<ArxivResult>) {
         &data).await.unwrap();
     println!("{:?}", result);
 
-    let client = BedrockClient::new(&conf);
-    let agent = BedrockAgent::new(client);
+    // Bedrock Agent
+    // let client = BedrockClient::new(&conf);
+    // let agent = BedrockAgent::new(client);
+
+    // OpenAI API Agent
+    let client = OpenAIClient::new();
+    let agent = OpenAIAgent::new(client);
+
     let data = agent.summarize(data).await;
     let key = "local/summarized.jsonl";
     let result = s3_storage.upload_arxiv_as_jsonl(

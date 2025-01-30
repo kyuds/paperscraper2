@@ -1,3 +1,13 @@
+use async_openai::{
+    config::OpenAIConfig, 
+    error::OpenAIError, 
+    types::{
+        ChatCompletionRequestSystemMessageArgs, 
+        ChatCompletionRequestUserMessageArgs, 
+        CreateChatCompletionRequestArgs
+    }, 
+    Client as OpenAIClient
+};
 use aws_sdk_bedrockruntime::{
     error::SdkError, 
     operation::invoke_model::InvokeModelError, 
@@ -21,8 +31,102 @@ use crate::{
     prompt::PROMPT
 };
 
+const OPENAI_MODEL: &str = "gpt-4o-mini";
+
+pub struct OpenAIAgent {
+    internal: Arc<OpenAIAgentInternal>
+}
+
+impl OpenAIAgent {
+    pub fn new(client: OpenAIClient<OpenAIConfig>) -> Self {
+        OpenAIAgent {
+            internal: Arc::new(OpenAIAgentInternal::new(client))
+        }
+    }
+
+    pub async fn summarize(&self, data: Vec<ArxivResult>) -> Vec<ArxivResult> {
+        let internal_clone = Arc::clone(&self.internal);
+        internal_clone.concurrent_summarize(data).await
+    }
+}
+
+struct OpenAIAgentInternal {
+    client: OpenAIClient<OpenAIConfig>
+}
+
+impl OpenAIAgentInternal {
+    pub fn new(client: OpenAIClient<OpenAIConfig>) -> Self {
+        OpenAIAgentInternal {
+            client
+        }
+    }
+
+    async fn single_summarize(
+        &self, 
+        mut data: ArxivResult
+    ) -> Result<ArxivResult, AgentError> {
+        let request = CreateChatCompletionRequestArgs::default()
+            .model(OPENAI_MODEL)
+            .max_tokens(150_u32)
+            .messages([
+                ChatCompletionRequestSystemMessageArgs::default()
+                    .content(PROMPT)
+                    .build()
+                    .unwrap()
+                    .into(),
+                ChatCompletionRequestUserMessageArgs::default()
+                    .content(data.summary.as_str())
+                    .build()
+                    .unwrap()
+                    .into(),
+            ])
+            .build()
+            .unwrap();
+
+        let summary = self.client
+            .chat()
+            .create(request)
+            .await
+            .map_err(AgentError::from)?
+            .choices
+            .into_iter()
+            .next()
+            .ok_or(AgentError::new("No completion"))?
+            .message
+            .content
+            .ok_or(AgentError::new("No completion"))?;
+        
+        data.summary = summary;
+        Ok(data)
+    }
+
+    async fn concurrent_summarize(
+        self: Arc<Self>,
+        data: Vec<ArxivResult>
+    ) -> Vec<ArxivResult> {
+        let handles = data.into_iter()
+            .map(|data| { 
+                let self_clone = Arc::clone(&self);
+                task::spawn(async move {
+                    self_clone.single_summarize(data).await
+                }) 
+            })
+            .collect::<Vec<_>>();
+        
+        let mut results: Vec<ArxivResult> = Vec::new();
+        for handle in handles {
+            match handle.await {
+                Ok(Ok(result)) => results.push(result),
+                Ok(Err(e)) => eprintln!("Agent error: {}", e),
+                Err(e) => eprintln!("Join error: {}", e)
+            }
+        }
+        results
+    }
+}
+
 // we hardcode the model id as each model has different input schemas.
-const MODEL_ID: &str = "us.amazon.nova-lite-v1:0";
+const BEDROCK_MODEL_ID: &str = "us.amazon.nova-lite-v1:0";
 
 pub struct BedrockAgent {
     internal: Arc<BedrockAgentInternal>
@@ -62,7 +166,7 @@ impl BedrockAgentInternal {
         let raw = self.client.invoke_model()
             .body(Blob::new(input))
             .content_type("application/json")
-            .model_id(MODEL_ID)
+            .model_id(BEDROCK_MODEL_ID)
             .send()
             .await
             .map_err(AgentError::from)?
@@ -250,5 +354,11 @@ impl From<JsonError> for AgentError {
 impl From<SdkError<InvokeModelError, HttpResponse>> for AgentError {
     fn from(err: SdkError<InvokeModelError, HttpResponse>) -> Self {
         AgentError::new(&format!("AWS SDK error: {}. Details: {:?}", err, err.raw_response()))
+    }
+}
+
+impl From<OpenAIError> for AgentError {
+    fn from(err: OpenAIError) -> Self {
+        AgentError::new(&format!("Open AI Error: {}", err))
     }
 }

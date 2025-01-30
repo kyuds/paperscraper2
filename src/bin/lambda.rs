@@ -1,11 +1,11 @@
+use async_openai::Client as OpenAIClient;
 use aws_config::Region;
 use aws_sdk_s3::Client as S3Client;
-use aws_sdk_bedrockruntime::Client as BedrockClient;
 use lambda_runtime::{service_fn, LambdaEvent, Error as LambdaError};
 use serde_json::Value;
 
 use paperscraper2::{
-    agent::BedrockAgent,
+    agent::OpenAIAgent,
     config::{ArxivConfig, NameConfig}, 
     parser::ArxivParser, 
     storage::S3Storage
@@ -39,9 +39,8 @@ async fn func(_event: LambdaEvent<Value>) -> Result<(), LambdaError> {
         &bucket, 
         &key, 
         &data).await?;
-
-    let bedrock_client = BedrockClient::new(&conf);
-    let agent = BedrockAgent::new(bedrock_client);
+    let openai_client = OpenAIClient::new();
+    let agent = OpenAIAgent::new(openai_client);
     let data = agent.summarize(data).await;
     let key = name_config.processed_jsonl_path();
     let _ = s3_storage.upload_arxiv_as_jsonl(

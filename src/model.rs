@@ -14,7 +14,21 @@ pub struct ArxivResult {
 }
 
 impl ArxivResult {
-    pub fn record_id(&self) -> String {
-        format!("ARXIV{:06}", self.id)
+    pub fn new(
+        id: usize, 
+        title: String, 
+        summary: String, 
+        authors: Vec<String>, 
+        published: DateTime<Utc>, 
+        link: String
+    ) -> Self {
+        ArxivResult {
+            id,
+            title,
+            summary,
+            authors,
+            published,
+            link
+        }
     }
 }

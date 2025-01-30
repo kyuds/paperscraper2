@@ -121,17 +121,6 @@ impl ArxivParser {
 // Arxiv Data Model Impl
 
 impl ArxivResult {
-    fn new(id: usize, title: String, summary: String, authors: Vec<String>, published: DateTime<Utc>, link: String) -> Self {
-        ArxivResult {
-            id,
-            title,
-            summary,
-            authors,
-            published,
-            link
-        }
-    }
-
     fn from_entry(id: usize, entry: ArxivEntry) -> Self {
         let re = Regex::new(r"\s+").unwrap();
         let published: DateTime<Utc> = DateTime::parse_from_rfc3339(&entry.published)
