@@ -46,7 +46,7 @@ async fn func(_event: LambdaEvent<Value>) -> Result<(), LambdaError> {
     let _ = s3_storage.upload_arxiv_as_jsonl(
         &bucket, 
         &key, 
-        &data).await.unwrap();
+        &data).await?;
     Ok(())
 }
 
