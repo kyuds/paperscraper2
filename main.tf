@@ -8,6 +8,10 @@ terraform {
             source  = "hashicorp/random"
             version = "~> 3.0"
         }
+        local = {
+            source = "hashicorp/local"
+            version = "~> 2.5"
+        }
     }
     required_version = ">= 1.2.0"
 }
@@ -23,9 +27,8 @@ variable "region" {
     default = "ap-northeast-2"
 }
 
-variable "lambda_file_name" {
-    type = string
-    default = "lambda.zip"
+data "local_file" "lambda_zip" {
+    filename = "lambda.zip"
 }
 
 variable "openai_api_key" {
@@ -120,7 +123,8 @@ resource "aws_lambda_function" "scraper_lambda" {
     architectures = ["arm64"]
     runtime = "provided.al2023"
     handler = "bootstrap"
-    filename = var.lambda_file_name
+    filename = data.local_file.lambda_zip.filename
+    source_code_hash = data.local_file.lambda_zip.content_sha1
 
     timeout = 120
 

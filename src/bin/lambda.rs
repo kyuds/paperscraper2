@@ -27,6 +27,11 @@ async fn func(_event: LambdaEvent<Value>) -> Result<(), LambdaError> {
     let name_config = NameConfig::default(&bucket);
     let parser = ArxivParser::from_config(parser_config);
     let data = parser.get_arxiv_results(None).await;
+
+    if data.is_empty() {
+        println!("No results. Exiting...");
+        return Ok(());
+    }
     
     let conf = aws_config::from_env()
         .region(Region::new(region))
