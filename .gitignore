@@ -24,9 +24,6 @@ target/
 *.md
 *.jsonl
 
-# Local Testing
-local.env
-
 # AWS Lambda Packaging
 *.zip
 
