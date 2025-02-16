@@ -4,7 +4,7 @@ use async_openai::Client as OpenAIClient;
 use aws_config::Region;
 use aws_sdk_bedrockruntime::Client as BedrockClient;
 use aws_sdk_s3::Client as S3Client;
-use paperscraper2::{
+use paperscraper::{
     agent::{BedrockAgent, OpenAIAgent}, 
     config::ArxivConfig, 
     model::ArxivResult, 

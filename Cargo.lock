@@ -2008,7 +2008,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "paperscraper2"
+name = "paperscraper"
 version = "0.1.0"
 dependencies = [
  "async-openai",

@@ -1,2 +1,2 @@
-# paperscraper2
+# paperscraper
 arXiv Paper Summary Automation

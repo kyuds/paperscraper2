@@ -4,7 +4,7 @@ use aws_sdk_s3::Client as S3Client;
 use lambda_runtime::{service_fn, LambdaEvent, Error as LambdaError};
 use serde_json::Value;
 
-use paperscraper2::{
+use paperscraper::{
     agent::OpenAIAgent,
     config::{ArxivConfig, NameConfig}, 
     parser::ArxivParser, 

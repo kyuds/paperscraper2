@@ -45,7 +45,7 @@ resource "random_id" "setup_tag" {
 
 # AWS S3 Configurations
 resource "aws_s3_bucket" "datastore" {
-    bucket = "paperscraper2-${var.environment}-${random_id.setup_tag.hex}"
+    bucket = "paperscraper-${var.environment}-${random_id.setup_tag.hex}"
     force_destroy = true
 }
 
@@ -67,7 +67,7 @@ resource "aws_s3_bucket_public_access_block" "datastore_public_access" {
 
 # AWS Lambda Configuration
 resource "aws_iam_role" "scraper_lambda_role" {
-    name = "paperscraper2-scraper-lambda-role-${var.environment}-${random_id.setup_tag.hex}"
+    name = "paperscraper-scraper-lambda-role-${var.environment}-${random_id.setup_tag.hex}"
 
     assume_role_policy = jsonencode({
         Version = "2012-10-17"
@@ -89,7 +89,7 @@ resource "aws_iam_role_policy_attachment" "scraper_lambda_basic_exec" {
 }
 
 resource "aws_iam_policy" "scraper_lambda_policy" {
-    name = "paperscraper2-scraper-lambda-policy-${var.environment}-${random_id.setup_tag.hex}"
+    name = "paperscraper-scraper-lambda-policy-${var.environment}-${random_id.setup_tag.hex}"
     description = "Custom policy for scraper lambda (s3 access)"
 
     policy = jsonencode({
@@ -118,7 +118,7 @@ resource "aws_iam_role_policy_attachment" "scraper_lambda_policy_attachment" {
 }
 
 resource "aws_lambda_function" "scraper_lambda" {
-    function_name = "paperscraper2-${var.environment}-${random_id.setup_tag.hex}"
+    function_name = "paperscraper-${var.environment}-${random_id.setup_tag.hex}"
     role = aws_iam_role.scraper_lambda_role.arn
     architectures = ["arm64"]
     runtime = "provided.al2023"
@@ -139,7 +139,7 @@ resource "aws_lambda_function" "scraper_lambda" {
 
 # AWS EventBridge Configuration
 resource "aws_cloudwatch_event_rule" "scraper_lambda_cron" {
-    name = "paperscraper2-scraper-lambda-cron-${var.environment}-${random_id.setup_tag.hex}"
+    name = "paperscraper-scraper-lambda-cron-${var.environment}-${random_id.setup_tag.hex}"
     description = "Trigger Lambda function at 16:00 UTC (1am KST)"
     schedule_expression = "cron(0 16 * * ? *)"
 }
