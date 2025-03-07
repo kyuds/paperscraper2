@@ -27,7 +27,7 @@ use std::{
 use tokio::task;
 
 use crate::{
-    model::ArxivResult,
+    model::{ArxivResult, ProcessedResult},
     prompt::PROMPT
 };
 
@@ -44,7 +44,7 @@ impl OpenAIAgent {
         }
     }
 
-    pub async fn summarize(&self, data: Vec<ArxivResult>) -> Vec<ArxivResult> {
+    pub async fn summarize(&self, data: Vec<ArxivResult>) -> Vec<ProcessedResult> {
         let internal_clone = Arc::clone(&self.internal);
         internal_clone.concurrent_summarize(data).await
     }
@@ -63,8 +63,8 @@ impl OpenAIAgentInternal {
 
     async fn single_summarize(
         &self, 
-        mut data: ArxivResult
-    ) -> Result<ArxivResult, AgentError> {
+        data: ArxivResult
+    ) -> Result<ProcessedResult, AgentError> {
         let request = CreateChatCompletionRequestArgs::default()
             .model(OPENAI_MODEL)
             .max_tokens(150_u32)
@@ -96,14 +96,13 @@ impl OpenAIAgentInternal {
             .content
             .ok_or(AgentError::new("No completion"))?;
         
-        data.summary = summary;
-        Ok(data)
+        Ok(ProcessedResult::from_result(data, summary))
     }
 
     async fn concurrent_summarize(
         self: Arc<Self>,
         data: Vec<ArxivResult>
-    ) -> Vec<ArxivResult> {
+    ) -> Vec<ProcessedResult> {
         let handles = data.into_iter()
             .map(|data| { 
                 let self_clone = Arc::clone(&self);
@@ -113,7 +112,7 @@ impl OpenAIAgentInternal {
             })
             .collect::<Vec<_>>();
         
-        let mut results: Vec<ArxivResult> = Vec::new();
+        let mut results: Vec<ProcessedResult> = Vec::new();
         for handle in handles {
             match handle.await {
                 Ok(Ok(result)) => results.push(result),
@@ -139,7 +138,7 @@ impl BedrockAgent {
         }
     }
 
-    pub async fn summarize(&self, data: Vec<ArxivResult>) -> Vec<ArxivResult> {
+    pub async fn summarize(&self, data: Vec<ArxivResult>) -> Vec<ProcessedResult> {
         let internal_clone = Arc::clone(&self.internal);
         internal_clone.concurrent_summarize(data).await
     }
@@ -159,7 +158,7 @@ impl BedrockAgentInternal {
     async fn single_summarize(
         &self, 
         data: ArxivResult
-    ) -> Result<ArxivResult, AgentError> {
+    ) -> Result<ProcessedResult, AgentError> {
         let model_input = ModelInput::default(&data.summary);
         let input = serde_json::to_string(&model_input).unwrap();
 
@@ -179,7 +178,7 @@ impl BedrockAgentInternal {
     async fn concurrent_summarize(
         self: Arc<Self>,
         data: Vec<ArxivResult>
-    ) -> Vec<ArxivResult> {
+    ) -> Vec<ProcessedResult> {
         let handles = data.into_iter()
             .map(|data| { 
                 let self_clone = Arc::clone(&self);
@@ -189,7 +188,7 @@ impl BedrockAgentInternal {
             })
             .collect::<Vec<_>>();
         
-        let mut results: Vec<ArxivResult> = Vec::new();
+        let mut results: Vec<ProcessedResult> = Vec::new();
         for handle in handles {
             match handle.await {
                 Ok(Ok(result)) => results.push(result),
@@ -308,19 +307,12 @@ impl ModelResponse {
             .unwrap_or_default()
     }
 
-    fn combine_arxiv(self, data: ArxivResult) -> Result<ArxivResult, AgentError> {
+    fn combine_arxiv(self, data: ArxivResult) -> Result<ProcessedResult, AgentError> {
         let summary = self.get_output();
         if summary.is_empty() {
             return Err(AgentError::new("summary is empty"));
         }
-        Ok(ArxivResult {
-            id: data.id,
-            title: data.title,
-            summary,
-            authors: data.authors,
-            published: data.published,
-            link: data.link
-        })
+        Ok(ProcessedResult::from_result(data, summary))
     }
 }
 

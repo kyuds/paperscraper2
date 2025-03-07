@@ -2,8 +2,7 @@ use dotenvy;
 use std::{env, process};
 use chrono::Utc;
 
-const RAW_FOLDER_PREFIX: &str = "raw";
-const PROCESSED_FOLDER_PREFIX: &str = "processed";
+const PROCESSED_FOLDER_PREFIX: &str = "summaries";
 
 #[derive(Debug)]
 pub struct ArxivConfig {
@@ -83,11 +82,7 @@ impl NameConfig {
         Self::new(bucket, &key)
     }
 
-    pub fn raw_jsonl_path(&self) -> String {
-        format!("{}/raw_{}.jsonl", RAW_FOLDER_PREFIX, self.key)
-    }
-
-    pub fn processed_jsonl_path(&self) -> String {
+    pub fn jsonl_path(&self) -> String {
         format!("{}/processed_{}.jsonl", PROCESSED_FOLDER_PREFIX, self.key)
     }
 }

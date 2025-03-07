@@ -39,15 +39,10 @@ async fn func(_event: LambdaEvent<Value>) -> Result<(), LambdaError> {
         .await;
     let s3_client = S3Client::new(&conf);
     let s3_storage = S3Storage::default(s3_client);
-    let key = name_config.raw_jsonl_path();
-    let _ = s3_storage.upload_arxiv_as_jsonl(
-        &bucket, 
-        &key, 
-        &data).await?;
     let openai_client = OpenAIClient::new();
     let agent = OpenAIAgent::new(openai_client);
     let data = agent.summarize(data).await;
-    let key = name_config.processed_jsonl_path();
+    let key = name_config.jsonl_path();
     let _ = s3_storage.upload_arxiv_as_jsonl(
         &bucket, 
         &key, 

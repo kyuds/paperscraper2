@@ -39,13 +39,6 @@ async fn process_results(data: Vec<ArxivResult>) {
     let client = S3Client::new(&conf);
     let s3_storage = S3Storage::new(client, false);
 
-    let key = "local/raw.jsonl";
-    let result = s3_storage.upload_arxiv_as_jsonl(
-        &bucket, 
-        key, 
-        &data).await.unwrap();
-    println!("{:?}", result);
-
     // Bedrock Agent
     // let client = BedrockClient::new(&conf);
     // let agent = BedrockAgent::new(client);
@@ -55,7 +48,7 @@ async fn process_results(data: Vec<ArxivResult>) {
     let agent = OpenAIAgent::new(client);
 
     let data = agent.summarize(data).await;
-    let key = "local/summarized.jsonl";
+    let key = "local/processed.jsonl";
     let result = s3_storage.upload_arxiv_as_jsonl(
         &bucket, 
         key, 
